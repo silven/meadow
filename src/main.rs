@@ -12,6 +12,7 @@ mod support;
 mod programs;
 mod rendering;
 use rendering::Vertex;
+use rendering::PosOnlyVertex;
 
 
 extern crate cgmath;
@@ -30,8 +31,7 @@ fn main() {
         .unwrap();
 
     // building a texture with "OpenGL" drawn on it
-    let image = image::load(Cursor::new(&include_bytes!("textures/opengl.png")[..]),
-        image::PNG).unwrap();
+    let image = image::load(Cursor::new(&include_bytes!("textures/opengl.png")[..]), image::PNG).unwrap();
     let opengl_texture = glium::texture::CompressedTexture2d::new(&display, image);
 
     let render_objects = vec![
@@ -54,6 +54,15 @@ fn main() {
         ),
     ];
 
+    let grass_points = rendering::RenderData::new2(&display,
+            vec![
+                PosOnlyVertex { position: [ 5.0,  0.1, 6.0] },
+                PosOnlyVertex { position: [ 0.0,  0.1, 6.0] },
+                PosOnlyVertex { position: [-5.0,  0.1, 6.0] },
+            ],
+            glium::index::PrimitiveType::Points,
+        );
+
     let quad = rendering::RenderData::new(&display,
             vec![
                 Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 0.0] },
@@ -74,12 +83,10 @@ fn main() {
 
     // compiling shaders and linking them together
     let pm = programs::ProgramManager::new();
-    //let simple = programs::ShaderBundle::new("simple.vs", "simple.fs", Some("simple.gs"), Some("simple.tc"), Some("simple.te"));
-    let simple = programs::ShaderBundle::new("simple.vs", "simple.fs", None, None, None);
-    let composition = programs::ShaderBundle::new("null.vs", "simple.fs", None, None, None);
 
-    let mut program = pm.create(&display, &simple).unwrap();
-    let mut composition_program = pm.create(&display, &composition).unwrap();
+    let mut program = pm.create(&display, &programs::ShaderBundle::new("simple.vs", "simple.fs", None, None, None)).unwrap();
+    let mut composition_program = pm.create(&display, &programs::ShaderBundle::new("null.vs", "simple.fs", None, None, None)).unwrap();
+    let mut grass_program = pm.create(&display, &programs::ShaderBundle::new("grass.vs", "grass.fs", Some("grass.gs"), None, None)).unwrap();
 
 
     // the main loop
@@ -100,16 +107,16 @@ fn main() {
             depth_test: glium::DepthTest::IfLess,
             depth_write: true,
             backface_culling: glium::BackfaceCullingMode::CullCounterClockWise,
+            point_size: Some(10.0),
             .. std::default::Default::default()
         };
 
         // First pass rendering
         framebuffer.clear_color_and_depth((0.0, 0.0, 0.0, 0.0), 1.0);
         for ro in render_objects.iter() {
-            framebuffer.draw(ro.get_vs(), ro.get_is(), &program, &uniforms, &params).unwrap();
+            framebuffer.draw(ro.get_vb(), ro.get_ib(), &program, &uniforms, &params).unwrap();
         }
-
-
+        framebuffer.draw(grass_points.get_vb(), grass_points.get_is(), &grass_program, &uniforms, &params).unwrap();
 
         // Final rendering
         let composition_uniforms = uniform! {
@@ -118,23 +125,13 @@ fn main() {
 
         let mut target = display.draw();
         target.clear_color_and_depth((0.0, 0.0, 0.0, 0.0), 1.0);
-        target.draw(quad.get_vs(), quad.get_is(), &composition_program, &composition_uniforms, &std::default::Default::default()).unwrap();
+        target.draw(quad.get_vb(), quad.get_ib(), &composition_program, &composition_uniforms, &std::default::Default::default()).unwrap();
         target.finish();
 
         // polling and handling the events received by the window
         for event in display.poll_events() {
             match event {
                 glutin::Event::Closed => return support::Action::Stop,
-
-                glutin::Event::KeyboardInput(glutin::ElementState::Pressed, _, Some(glutin::VirtualKeyCode::R)) => {
-                    match pm.create(&display, &simple) {
-                        Ok(p) => {
-                            program = p;
-                            println!("Successfully recompiled program");
-                        },
-                        Err(msg) => println!("Could not recompile program: '{:?}'", msg)
-                    };
-                },
                 ev => camera.process_input(&display.get_window().unwrap(), &ev),
             }
         }
