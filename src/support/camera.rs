@@ -53,7 +53,7 @@ impl CameraState {
     }
 
     pub fn get_perspective(&self) -> Matrix4<f32> {
-        let zfar = 25.0;
+        let zfar = 100.0;
         let znear = 0.1;
         return perspective(deg(self.fov), self.aspect_ratio, znear, zfar);
     }

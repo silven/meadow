@@ -13,7 +13,7 @@ pub struct ShaderBundle {
 
 impl ShaderBundle {
     pub fn new(vs: &str, fs: &str, gs: Option<&str>, tc: Option<&str>, te: Option<&str>) -> Self {
-        ShaderBundle{
+        ShaderBundle {
             vs: vs.to_string(),
             fs: fs.to_string(),
             gs: gs.and_then(|s| Some(s.to_string())),
@@ -27,7 +27,7 @@ fn read_shader(path: &String) -> String {
     use std::fs::File;
     use std::io::Read;
     use std::path::Path;
-    let src_dir = Path::new("src/shaders");
+    let src_dir = Path::new("shaders");
 
     let complete_path = src_dir.join(path);
     let as_str = complete_path.to_str().unwrap();
