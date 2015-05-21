@@ -160,7 +160,7 @@ impl CameraState {
             &glutin::Event::MouseMoved((x, y)) => {
                 if self.mouse_pressed {
                     let (w, h) = window.get_inner_size().unwrap();
-                    let dx = (x - self.mouse_x) as f32 / w as f32;
+                    let dx = -(x - self.mouse_x) as f32 / w as f32;
                     let dy = (y - self.mouse_y) as f32 / h as f32;
 
                     let rot_x: Quaternion<f32> = Rotation3::from_angle_y(rad(dx / 1.0));

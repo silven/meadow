@@ -7,6 +7,7 @@ extern crate image;
 use std::io::Cursor;
 
 use glium::Surface;
+use std::f32;
 
 mod support;
 mod programs;
@@ -33,6 +34,9 @@ fn main() {
     // building a texture with "OpenGL" drawn on it
     let image = image::load(Cursor::new(&include_bytes!("textures/opengl.png")[..]), image::PNG).unwrap();
     let opengl_texture = glium::texture::CompressedTexture2d::new(&display, image);
+
+    let grass_png = image::load(Cursor::new(&include_bytes!("textures/grass.png")[..]), image::PNG).unwrap();
+    let grass_texture = glium::texture::CompressedTexture2d::new(&display, grass_png);
 
     let render_objects = vec![
         rendering::RenderData::new(&display,
@@ -90,7 +94,9 @@ fn main() {
 
 
     // the main loop
+    let mut tick_number = 0;
     support::start_loop(|| {
+        tick_number += 1;
         camera.update();
 
         // building the uniforms
@@ -99,15 +105,17 @@ fn main() {
             persp_matrix: camera.get_perspective().into_fixed(),
             view_matrix: camera.get_view().into_fixed(),
 
+
+            windforce: cgmath::vec3((tick_number as f32 / 100.0).sin(), 0.0, 0.0).into_fixed(),
             texture_unit: &opengl_texture,
+            grass_texture_unit: &grass_texture,
         };
 
         // draw parameters
-        let params = glium::DrawParameters {
+        let mut params = glium::DrawParameters {
             depth_test: glium::DepthTest::IfLess,
             depth_write: true,
             backface_culling: glium::BackfaceCullingMode::CullCounterClockWise,
-            point_size: Some(10.0),
             .. std::default::Default::default()
         };
 
@@ -116,6 +124,8 @@ fn main() {
         for ro in render_objects.iter() {
             framebuffer.draw(ro.get_vb(), ro.get_ib(), &program, &uniforms, &params).unwrap();
         }
+
+        params.backface_culling = glium::BackfaceCullingMode::CullingDisabled;
         framebuffer.draw(grass_points.get_vb(), grass_points.get_is(), &grass_program, &uniforms, &params).unwrap();
 
         // Final rendering
