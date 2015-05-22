@@ -12,8 +12,14 @@ pub struct PosOnlyVertex {
     pub position: [f32; 3],
 }
 
+#[derive(Copy, Clone)]
+pub struct GrassAttrs {
+    pub offset: [f32; 3],
+}
+
 implement_vertex!(Vertex, position, tex_coords);
 implement_vertex!(PosOnlyVertex, position);
+implement_vertex!(GrassAttrs, offset);
 
 
 enum Indices {

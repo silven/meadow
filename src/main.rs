@@ -1,4 +1,5 @@
 extern crate glutin;
+extern crate rand;
 
 #[macro_use]
 extern crate glium;
@@ -14,11 +15,12 @@ mod programs;
 mod rendering;
 use rendering::Vertex;
 use rendering::PosOnlyVertex;
-
+use rendering::GrassAttrs;
+use rand::Rng;
 
 extern crate cgmath;
 use cgmath::FixedArray;
-
+use glium::draw_parameters::LinearBlendingFactor;
 
 fn main() {
     use glium::DisplayBuild;
@@ -38,6 +40,9 @@ fn main() {
     let grass_png = image::load(Cursor::new(&include_bytes!("textures/grass.png")[..]), image::PNG).unwrap();
     let grass_texture = glium::texture::CompressedTexture2d::new(&display, grass_png);
 
+    let mask_png = image::load(Cursor::new(&include_bytes!("textures/grass_mask.png")[..]), image::PNG).unwrap();
+    let mask_texture = glium::texture::CompressedTexture2d::new(&display, mask_png);
+
     let render_objects = vec![
         rendering::RenderData::new(&display,
             vec![
@@ -48,24 +53,27 @@ fn main() {
             ],
             glium::index::TriangleStrip(vec![1 as u16, 0, 2, 3]),
         ),
-        rendering::RenderData::new(&display,
-            vec![
-            Vertex { position: [ 5.0, -5.0, 5.0], tex_coords: [0.0, 1.0] },
-            Vertex { position: [ 0.0,  5.0, 5.0], tex_coords: [1.0, 1.0] },
-            Vertex { position: [-5.0, -5.0, 5.0], tex_coords: [0.0, 0.0] },
-            ],
-            glium::index::TrianglesList(vec![0u16, 1, 2]),
-        ),
     ];
 
-    let grass_points = rendering::RenderData::new2(&display,
-            vec![
-                PosOnlyVertex { position: [ 5.0,  0.1, 6.0] },
-                PosOnlyVertex { position: [ 0.0,  0.1, 6.0] },
-                PosOnlyVertex { position: [-5.0,  0.1, 6.0] },
-            ],
-            glium::index::PrimitiveType::Points,
-        );
+    let grass_points = glium::VertexBuffer::new(&display, vec![
+        PosOnlyVertex { position: [ 0.0,  0.0, 0.0] },
+        PosOnlyVertex { position: [ 0.0,  0.0, 0.5] },
+        PosOnlyVertex { position: [ 0.5,  0.0, 0.0] },
+        PosOnlyVertex { position: [ 0.5,  0.0, 0.5] },
+    ]);
+    let grass_indices = glium::index::NoIndices(glium::index::PrimitiveType::Points);
+
+    let mut attrs = vec![];
+    let mut rng = rand::thread_rng();
+    for x in 0..10 {
+        for z in 0..10 {
+            let (jitter_x, jitter_z) = rng.gen::<(f32, f32)>();
+            let px = x as f32 + jitter_x / 2.0;
+            let pz = z as f32 + jitter_z / 2.0;
+            attrs.push(GrassAttrs { offset: [ px,  (px + pz).sin().abs() / 2.0, pz] });
+        }
+    }
+    let grass_attrs = glium::VertexBuffer::new(&display, attrs);
 
     let quad = rendering::RenderData::new(&display,
             vec![
@@ -93,6 +101,8 @@ fn main() {
     let mut grass_program = pm.create(&display, &programs::ShaderBundle::new("grass.vs", "grass.fs", Some("grass.gs"), None, None)).unwrap();
 
 
+    let default_blending = Some(glium::BlendingFunction::Addition { source: LinearBlendingFactor::SourceAlpha, destination: LinearBlendingFactor::OneMinusSourceAlpha });
+
     // the main loop
     let mut tick_number = 0;
     support::start_loop(|| {
@@ -105,10 +115,10 @@ fn main() {
             persp_matrix: camera.get_perspective().into_fixed(),
             view_matrix: camera.get_view().into_fixed(),
 
-
             windforce: cgmath::vec3((tick_number as f32 / 100.0).sin(), 0.0, 0.0).into_fixed(),
             texture_unit: &opengl_texture,
             grass_texture_unit: &grass_texture,
+            mask_texture_unit: &mask_texture
         };
 
         // draw parameters
@@ -116,6 +126,7 @@ fn main() {
             depth_test: glium::DepthTest::IfLess,
             depth_write: true,
             backface_culling: glium::BackfaceCullingMode::CullCounterClockWise,
+
             .. std::default::Default::default()
         };
 
@@ -126,7 +137,7 @@ fn main() {
         }
 
         params.backface_culling = glium::BackfaceCullingMode::CullingDisabled;
-        framebuffer.draw(grass_points.get_vb(), grass_points.get_is(), &grass_program, &uniforms, &params).unwrap();
+        framebuffer.draw((&grass_points, grass_attrs.per_instance_if_supported().unwrap()), &grass_indices, &grass_program, &uniforms, &params).unwrap();
 
         // Final rendering
         let composition_uniforms = uniform! {

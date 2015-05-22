@@ -20,7 +20,7 @@ void main(){
 
     float height = 2.0;
     float width = 0.1;
-    vec4 right = vec4(1.0, 0.0, 0.0, 0.0);
+    vec4 right = vec4(normalize(vec3(seedPos.x, 0.0, seedPos.z)), 0.0);
     vec4 left = vec4(cross(up.xyz, right.xyz), 0);
 
 

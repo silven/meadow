@@ -9,6 +9,6 @@ in VertexData {
 out vec4 output1;
 
 void main() {
-    output1 = texture(texture_unit, v_in.tex_coords);
-    //output1 = vec4(1.0, 0.0, 1.0, 1.0);
+    vec3 texture_color = texture(texture_unit, v_in.tex_coords).xyz;
+    output1 = vec4(texture_color, 1.0);
 }
