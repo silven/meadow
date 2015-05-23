@@ -13,6 +13,8 @@ use std::f32;
 mod support;
 mod programs;
 mod rendering;
+mod heightmap;
+
 use rendering::Vertex;
 use rendering::PosOnlyVertex;
 use rendering::GrassAttrs;
@@ -21,6 +23,14 @@ use rand::Rng;
 extern crate cgmath;
 use cgmath::FixedArray;
 use glium::draw_parameters::LinearBlendingFactor;
+
+static NOISE_SAMPLES: usize = 16;
+
+fn world_to_heightmap(v: f32) -> f32 {
+    let noise_freq = 0.05;
+    return (v + 0.5) * noise_freq;
+}
+
 
 fn main() {
     use glium::DisplayBuild;
@@ -37,42 +47,83 @@ fn main() {
     let image = image::load(Cursor::new(&include_bytes!("textures/opengl.png")[..]), image::PNG).unwrap();
     let opengl_texture = glium::texture::CompressedTexture2d::new(&display, image);
 
+    let noise_data = heightmap::noise(NOISE_SAMPLES);
+
     let grass_png = image::load(Cursor::new(&include_bytes!("textures/grass.png")[..]), image::PNG).unwrap();
     let grass_texture = glium::texture::CompressedTexture2d::new(&display, grass_png);
 
     let mask_png = image::load(Cursor::new(&include_bytes!("textures/grass_mask.png")[..]), image::PNG).unwrap();
     let mask_texture = glium::texture::CompressedTexture2d::new(&display, mask_png);
 
+    let mut terrain_data = Vec::new();
+    let mut attrs = vec![];
+
+
+    let resolution = 16usize;
+    let scale = 2usize;
+
+    let mut rng = rand::thread_rng();
+    for x in 0..resolution {
+        for z in 0..resolution {
+            let fx = x as f32 / (resolution) as f32;
+            let fz = z as f32 / (resolution) as f32;
+
+            let px = (x * scale) as f32;
+            let pz = (z * scale) as f32;
+
+            let noise_px = world_to_heightmap(px);
+            let noise_pz = world_to_heightmap(pz);
+            let height_value = 5.0 * (0.5 + noise_data.get(noise_px, noise_pz));
+
+            terrain_data.push(Vertex {
+                position: [ px, height_value, pz],
+                tex_coords: [px, pz]
+            });
+
+            for _ in 0..100 {
+                let (jitter_x, jitter_z, personal) = rng.gen::<(f32, f32, f32)>();
+
+                let gx = px + scale as f32 * (jitter_x);
+                let gz = pz + scale as f32 * (jitter_z);
+
+                let noise_gx = world_to_heightmap(gx);
+                let noise_gz = world_to_heightmap(gz);
+                let grass_height_value = 5.0 * (0.5 + noise_data.get(noise_gx, noise_gz));
+
+                attrs.push(GrassAttrs { offset: [ gx, grass_height_value, gz ], rand_factor: personal});
+            }
+
+
+        }
+    }
+
+    let mut index_data = Vec::new();
+    for i in 0..(resolution-1) {
+        for j in 0..(resolution-1) {
+            let i1 = i     * resolution + j;
+            let i2 = (i+1) * resolution + j;
+            let i3 = i     * resolution + j+1;
+            let i4 = (i+1) * resolution + j+1;
+            index_data.push(i1 as u16);
+            index_data.push(i2 as u16);
+            index_data.push(i3 as u16);
+            index_data.push(i2 as u16);
+            index_data.push(i3 as u16);
+            index_data.push(i4 as u16);
+        }
+    }
+
     let render_objects = vec![
         rendering::RenderData::new(&display,
-            vec![
-                Vertex { position: [ 0.0, 0.0, 0.0], tex_coords: [1.0, 0.0] },
-                Vertex { position: [ 0.0, 0.0, 10.0], tex_coords: [1.0, 1.0] },
-                Vertex { position: [ 10.0, 0.0, 10.0], tex_coords: [0.0, 1.0] },
-                Vertex { position: [ 10.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
-            ],
-            glium::index::TriangleStrip(vec![1 as u16, 0, 2, 3]),
+            terrain_data,
+            glium::index::TrianglesList(index_data),
         ),
     ];
 
     let grass_points = glium::VertexBuffer::new(&display, vec![
         PosOnlyVertex { position: [ 0.0,  0.0, 0.0] },
-        PosOnlyVertex { position: [ 0.0,  0.0, 0.5] },
-        PosOnlyVertex { position: [ 0.5,  0.0, 0.0] },
-        PosOnlyVertex { position: [ 0.5,  0.0, 0.5] },
     ]);
     let grass_indices = glium::index::NoIndices(glium::index::PrimitiveType::Points);
-
-    let mut attrs = vec![];
-    let mut rng = rand::thread_rng();
-    for x in 0..10 {
-        for z in 0..10 {
-            let (jitter_x, jitter_z) = rng.gen::<(f32, f32)>();
-            let px = x as f32 + jitter_x / 2.0;
-            let pz = z as f32 + jitter_z / 2.0;
-            attrs.push(GrassAttrs { offset: [ px,  (px + pz).sin().abs() / 2.0, pz] });
-        }
-    }
     let grass_attrs = glium::VertexBuffer::new(&display, attrs);
 
     let quad = rendering::RenderData::new(&display,
@@ -116,7 +167,8 @@ fn main() {
             view_matrix: camera.get_view().into_fixed(),
 
             windforce: cgmath::vec3((tick_number as f32 / 100.0).sin(), 0.0, 0.0).into_fixed(),
-            texture_unit: &opengl_texture,
+            //texture_unit: &noise_texture,
+            texture_unit: &grass_texture,
             grass_texture_unit: &grass_texture,
             mask_texture_unit: &mask_texture
         };
@@ -125,7 +177,7 @@ fn main() {
         let mut params = glium::DrawParameters {
             depth_test: glium::DepthTest::IfLess,
             depth_write: true,
-            backface_culling: glium::BackfaceCullingMode::CullCounterClockWise,
+            backface_culling: glium::BackfaceCullingMode::CullingDisabled,
 
             .. std::default::Default::default()
         };
@@ -136,7 +188,6 @@ fn main() {
             framebuffer.draw(ro.get_vb(), ro.get_ib(), &program, &uniforms, &params).unwrap();
         }
 
-        params.backface_culling = glium::BackfaceCullingMode::CullingDisabled;
         framebuffer.draw((&grass_points, grass_attrs.per_instance_if_supported().unwrap()), &grass_indices, &grass_program, &uniforms, &params).unwrap();
 
         // Final rendering
