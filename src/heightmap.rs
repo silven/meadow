@@ -24,6 +24,7 @@ fn gradient(orig: Vector2<f32>, grad: Vector2<f32>, p: Vector2<f32>) -> f32 {
 }
 
 pub struct NoiseContext {
+    size: usize,
     rgradients: Vec<Vec<Vector2<f32>>>,
 }
 
@@ -42,6 +43,7 @@ impl NoiseContext {
         }
 
         return NoiseContext {
+            size: size,
             rgradients: grad_data,
         };
     }
@@ -64,12 +66,10 @@ impl NoiseContext {
     }
 
     fn get_gradient(&self, x: i32, y: i32) -> Vector2<f32> {
-        //let yidx = self.permutations[y as usize];
-        //let xidx = self.permutations[x as usize];
         return self.rgradients[y as usize][x as usize];
     }
 
-    pub fn get(&self, x: f32, y: f32) -> f32 {
+    fn get(&self, x: f32, y: f32) -> f32 {
         let p = Vector2 {x: x, y: y};
         let (gradients, origins) = self.get_gradients(x, y);
 
@@ -85,8 +85,23 @@ impl NoiseContext {
 
         lerp(vx0, vx1, fy)
     }
+
+    pub fn get_height(&self, x: f32, z: f32) -> f32 {
+
+        // Low frequencies generates rolling hills
+        let x1 = (x + 0.5) * 0.08;
+        let z1 = (z + 0.5) * 0.08;
+
+        // Higher frequencies generates noise
+        let x2 = (x + 0.5) * 0.2;
+        let z2 = (z + 0.5) * 0.2;
+
+        return 0.5 + 5.0 * self.get(x1, z1) + self.get(x2, z2);
+    }
+
 }
 
-pub fn noise(samples: usize) -> NoiseContext {
-    return NoiseContext::new(samples);
+
+pub fn noise(size: usize) -> NoiseContext {
+    return NoiseContext::new(size);
 }

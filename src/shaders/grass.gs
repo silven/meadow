@@ -32,8 +32,8 @@ void main(){
 
     vec4 up = vec4(0.0, 1.0, 0.0, 0.0);
 
-    float height = 2.0;
-    float width = 0.05;
+    float height = 1.0;
+    float width = 0.02;
     vec4 right = vec4(normalize(vec3(personal, 0.0, v_in[0].rand_factor)), 0.0);
     vec4 left = vec4(cross(up.xyz, right.xyz), 0);
 

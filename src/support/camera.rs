@@ -22,9 +22,7 @@ pub struct CameraState {
     mouse_x: i32,
     mouse_y: i32,
 
-    moving_up: bool,
     moving_left: bool,
-    moving_down: bool,
     moving_right: bool,
     moving_forward: bool,
     moving_backward: bool,
@@ -36,16 +34,14 @@ impl CameraState {
             fov: 45.0,
             aspect_ratio: width as f32 / height as f32,
 
-            position: Point3{x: 0.0, y: 2.0, z: 0.0},
+            position: Point3{x: 5.0, y: 5.0, z: 5.0},
             direction: Vector3{x: 1.0, y: 0.0, z: 1.0}.normalize(),
 
             mouse_pressed: false,
             mouse_x: 0,
             mouse_y: 0,
 
-            moving_up: false,
             moving_left: false,
-            moving_down: false,
             moving_right: false,
             moving_forward: false,
             moving_backward: false,
@@ -63,22 +59,14 @@ impl CameraState {
         return Matrix4::look_at(&self.position, &point_to_look_at, &Vector3::unit_y());
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, heightmap: &super::super::heightmap::NoiseContext) {
         let speed = 0.1;
 
         self.direction = self.direction.normalize();
         let left = Vector3::unit_y().cross(&self.direction);
 
-        if self.moving_up {
-            self.position.y += speed;
-        }
-
         if self.moving_left {
             self.position.add_self_v(&left.mul_s(speed));
-        }
-
-        if self.moving_down {
-            self.position.y -= speed;
         }
 
         if self.moving_right {
@@ -92,23 +80,13 @@ impl CameraState {
         if self.moving_backward {
             self.position.add_self_v(&self.direction.mul_s(-speed));
         }
+
+        self.position.y = 2.0 + heightmap.get_height(self.position.x, self.position.z);
+
     }
 
     pub fn process_input(&mut self, window: &glutin::Window, event: &glutin::Event) {
         match event {
-            &glutin::Event::KeyboardInput(state, _, Some(glutin::VirtualKeyCode::Space)) => {
-                self.moving_up = match state {
-                    glutin::ElementState::Pressed => true,
-                    glutin::ElementState::Released => false,
-                };
-            },
-
-            &glutin::Event::KeyboardInput(state, _, Some(glutin::VirtualKeyCode::X)) => {
-                self.moving_down = match state {
-                    glutin::ElementState::Pressed => true,
-                    glutin::ElementState::Released => false,
-                };
-            },
 
             &glutin::Event::KeyboardInput(state, _, Some(glutin::VirtualKeyCode::A)) => {
                 self.moving_left = match state {
