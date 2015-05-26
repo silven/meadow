@@ -149,7 +149,7 @@ fn main() {
     // compiling shaders and linking them together
     let pm = programs::ProgramManager::new();
 
-    let mut program = pm.create(&display, &programs::ShaderBundle::new("simple.vs", "simple.fs", None, None, None)).unwrap();
+    let mut program = pm.create(&display, &programs::ShaderBundle::new("simple.vs", "terrain.fs", None, None, None)).unwrap();
     let mut composition_program = pm.create(&display, &programs::ShaderBundle::new("null.vs", "simple.fs", None, None, None)).unwrap();
     let mut grass_program = pm.create(&display, &programs::ShaderBundle::new("grass.vs", "grass.fs", Some("grass.gs"), None, None)).unwrap();
 
