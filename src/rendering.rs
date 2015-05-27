@@ -29,7 +29,7 @@ enum Indices {
 }
 
 
-pub struct RenderData<V: glium::vertex::Vertex> {
+pub struct RenderData<V: glium::vertex::Vertex + Send + Copy + 'static> {
     vertices: glium::VertexBuffer<V>,
     indices:  Indices,
 }

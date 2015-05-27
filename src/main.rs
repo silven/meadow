@@ -1,3 +1,5 @@
+#![feature(collections)]
+
 extern crate glutin;
 extern crate rand;
 
@@ -14,11 +16,16 @@ mod support;
 mod programs;
 mod rendering;
 mod heightmap;
+mod terrain;
+mod skybox;
 
 use rendering::Vertex;
 use rendering::PosOnlyVertex;
 use rendering::GrassAttrs;
 use rand::Rng;
+
+use glium::backend::Facade;
+
 
 extern crate cgmath;
 use cgmath::FixedArray;
@@ -53,7 +60,7 @@ fn main() {
     let mut terrain_data = Vec::new();
     let mut attrs = vec![];
 
-    let resolution = 64usize;
+    let resolution = 65usize;
     let scale = 1usize;
 
     let mut grass_jitter = Vec::new();
@@ -118,9 +125,14 @@ fn main() {
         }
     }
 
-    let terrain_vbo = glium::VertexBuffer::new(&display, terrain_data);
-    let terrain_indicies = glium::IndexBuffer::new(&display,glium::index::TrianglesList(index_data));
-    let terrain_wireframe = glium::IndexBuffer::new(&display, glium::index::LinesList(wireframe));
+    //let terrain_vbo = glium::VertexBuffer::new(&display, terrain_data);
+    //let terrain_indicies = glium::IndexBuffer::new(&display,glium::index::TrianglesList(index_data));
+    //let terrain_wireframe = glium::IndexBuffer::new(&display, glium::index::LinesList(wireframe));
+
+    let pm = programs::ProgramManager::new();
+    let mut program = pm.create(&display, &programs::ShaderBundle::new("simple.vs", "terrain.fs", None, None, None)).unwrap();
+
+    let mut t = terrain::Terrain::new(&display, terrain_data, wireframe, program);
 
     let grass_points = glium::VertexBuffer::new(&display, vec![
         PosOnlyVertex { position: [ 0.0,  0.0, 0.0] },
@@ -147,16 +159,14 @@ fn main() {
     let mut framebuffer = glium::framebuffer::MultiOutputFrameBuffer::with_depth_buffer(&display, output, &depthtexture);
 
     // compiling shaders and linking them together
-    let pm = programs::ProgramManager::new();
 
-    let mut program = pm.create(&display, &programs::ShaderBundle::new("simple.vs", "terrain.fs", None, None, None)).unwrap();
     let mut composition_program = pm.create(&display, &programs::ShaderBundle::new("null.vs", "simple.fs", None, None, None)).unwrap();
     let mut grass_program = pm.create(&display, &programs::ShaderBundle::new("grass.vs", "grass.fs", Some("grass.gs"), None, None)).unwrap();
 
 
     let default_blending = Some(glium::BlendingFunction::Addition { source: LinearBlendingFactor::SourceAlpha, destination: LinearBlendingFactor::OneMinusSourceAlpha });
 
-    let mut wireframe_mode = false;
+    let mut wireframe_mode = true;
 
     // the main loop
     let mut tick_number = 0;
@@ -186,16 +196,18 @@ fn main() {
             .. std::default::Default::default()
         };
 
+        // Skybox is rendered first?
+
         // First pass rendering
         framebuffer.clear_color_and_depth((0.8, 0.95, 0.99, 0.0), 1.0);
-        if wireframe_mode {
-            framebuffer.draw(&terrain_vbo, &terrain_wireframe, &program, &uniforms, &params).unwrap();
-        } else {
-            framebuffer.draw(&terrain_vbo, &terrain_indicies, &program, &uniforms, &params).unwrap();
-        }
 
+        skybox::render();
+
+        t.render(&display, &mut framebuffer, &uniforms, &params);
 
         //framebuffer.draw((&grass_points, grass_attrs.per_instance_if_supported().unwrap()), &grass_indices, &grass_program, &uniforms, &params).unwrap();
+
+
 
         // Final rendering
         let composition_uniforms = uniform! {
@@ -220,7 +232,10 @@ fn main() {
                     wireframe_mode = false;
                 },
 
-                ev => camera.process_input(&display.get_window().unwrap(), &ev),
+                ev => {
+                    t.update(&ev);
+                    camera.process_input(&display.get_window().unwrap(), &ev);
+                },
             }
         }
         support::Action::Continue
