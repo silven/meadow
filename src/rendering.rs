@@ -23,29 +23,16 @@ implement_vertex!(PosOnlyVertex, position);
 implement_vertex!(GrassAttrs, offset, rand_factor);
 
 
-enum Indices {
-    Buffer(glium::IndexBuffer),
-    NoIndices(glium::index::NoIndices),
-}
-
-
 pub struct RenderData<V: glium::vertex::Vertex + Send + Copy + 'static> {
     vertices: glium::VertexBuffer<V>,
-    indices:  Indices,
+    indices:  glium::IndexBuffer,
 }
 
 impl<V: glium::vertex::Vertex + Send + Copy + 'static> RenderData<V> {
     pub fn new<D: glium::backend::Facade, T: glium::index::IntoIndexBuffer>(display: &D, vs: Vec<V>, is: T) -> Self {
         RenderData {
             vertices: glium::VertexBuffer::new(display, vs),
-            indices: Indices::Buffer(glium::IndexBuffer::new(display, is)),
-        }
-    }
-
-    pub fn new2<D: glium::backend::Facade>(display: &D, vs: Vec<V>, p: glium::index::PrimitiveType) -> Self {
-        RenderData {
-            vertices: glium::VertexBuffer::new(display, vs),
-            indices: Indices::NoIndices(glium::index::NoIndices(p)),
+            indices: glium::IndexBuffer::new(display, is),
         }
     }
 
@@ -54,16 +41,6 @@ impl<V: glium::vertex::Vertex + Send + Copy + 'static> RenderData<V> {
     }
 
     pub fn get_ib(&self) -> &glium::IndexBuffer {
-        match self.indices {
-            Indices::Buffer(ref b) => b,
-            _ => panic!("Bad choice!"),
-        }
-    }
-
-    pub fn get_is(&self) -> &glium::index::NoIndices {
-        match self.indices {
-            Indices::NoIndices(ref p) => p,
-            _ => panic!("Bad choice!"),
-        }
+        &self.indices
     }
 }

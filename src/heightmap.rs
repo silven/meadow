@@ -24,18 +24,17 @@ fn gradient(orig: Vector2<f32>, grad: Vector2<f32>, p: Vector2<f32>) -> f32 {
 }
 
 pub struct NoiseContext {
-    size: usize,
     rgradients: Vec<Vec<Vector2<f32>>>,
 }
 
 impl NoiseContext {
-    fn new(size: usize) -> Self {
+    pub fn new(size: usize) -> Self {
         let mut rng = rand::thread_rng();
 
         let mut grad_data = Vec::with_capacity(size + 1);
-        for x in 0..(size+1) {
+        for _ in 0..(size+1) {
             let mut row_data = Vec::with_capacity(size + 1);
-            for y in 0..(size+1) {
+            for _ in 0..(size+1) {
                 let gradient = random_gradient(&mut rng);
                 row_data.push(gradient);
             }
@@ -43,7 +42,6 @@ impl NoiseContext {
         }
 
         return NoiseContext {
-            size: size,
             rgradients: grad_data,
         };
     }
@@ -87,7 +85,6 @@ impl NoiseContext {
     }
 
     pub fn get_height(&self, x: f32, z: f32) -> f32 {
-
         // Low frequencies generates rolling hills
         let x1 = (x + 0.5) * 0.08;
         let z1 = (z + 0.5) * 0.08;
@@ -98,10 +95,5 @@ impl NoiseContext {
 
         return 0.5 + 5.0 * self.get(x1, z1) + self.get(x2, z2);
     }
-
 }
 
-
-pub fn noise(size: usize) -> NoiseContext {
-    return NoiseContext::new(size);
-}

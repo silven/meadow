@@ -1,15 +1,27 @@
-#![feature(collections)]
+
+extern crate num;
+
+extern crate rand;
 
 use glium;
 use glutin;
 
 use rendering::Vertex;
+use rendering::PosOnlyVertex;
+use rendering::GrassAttrs;
+use rand::Rng;
+
+use heightmap::NoiseContext;
 
 pub struct Terrain {
-    vbo: glium::VertexBuffer<Vertex>,
-    wireframe: glium::IndexBuffer,
-    program: glium::Program,
-    level: u16,
+    terrain_vbo: glium::VertexBuffer<Vertex>,
+    grass_vbo: glium::VertexBuffer<PosOnlyVertex>,
+    grass_indices: glium::index::NoIndices,
+    grass_attrs: glium::VertexBuffer<GrassAttrs>,
+
+    terrain_program: glium::Program,
+    grass_program: glium::Program,
+    level: usize,
 }
 
 fn xy_to_index(x: u16, y: u16) -> u16 {
@@ -45,18 +57,15 @@ fn s(p: P, w: u16) -> Square {
 }
 
 
-//
-//   0   1  2  3  4
-//   5   6  7  8  9
-//   10 11 12 13 14
-//   15 16 17 18 19
-//   20 21 22 23 24
-//
-// =>
+fn full_triangle(a: P, b: P, c: P) -> [u16; 3] {
+    return [
+        p_to_index(a),
+        p_to_index(b),
+        p_to_index(c),
+    ];
+}
 
-
-
-fn triangle(a: P, b: P, c: P) -> [u16; 6] {
+fn wireframe_triangle(a: P, b: P, c: P) -> [u16; 6] {
     return [
         p_to_index(a),
         p_to_index(b),
@@ -69,13 +78,10 @@ fn triangle(a: P, b: P, c: P) -> [u16; 6] {
     ];
 }
 
-fn subdivide(idx: &mut Vec<u16>, level: u16, sq: Square) {
-
+fn subdivide(idx: &mut Vec<u16>, level: usize, sq: Square) {
     let size = sq.w/2;
     let tl = sq.top;
     let tr = p(sq.top.x + sq.w, sq.top.y);
-
-    let c  = p(sq.top.x + size, sq.top.y + size);
 
     let br = p(sq.top.x + sq.w, sq.top.y + sq.w);
     let bl = p(sq.top.x, sq.top.y + sq.w);
@@ -86,44 +92,91 @@ fn subdivide(idx: &mut Vec<u16>, level: u16, sq: Square) {
         subdivide(idx, level-1, s(p2(tl,    0, size), size));
         subdivide(idx, level-1, s(p2(tl, size, size), size));
     } else {
-        idx.push_all(&triangle(c, tl, bl));
-        idx.push_all(&triangle(c, bl, br));
-        idx.push_all(&triangle(c, br, tr));
-        idx.push_all(&triangle(c, tr, tl));
+        idx.push_all(&full_triangle(tl, bl, br));
+        idx.push_all(&full_triangle(tl, tr, br));
     }
 }
 
+static MAX_GRASS_PER_SQUARE: usize = 100;
+const WORLD_SIZE: u16 = 65;
+
 impl Terrain {
 
-    pub fn new<F: glium::backend::Facade>(display: &F, vertices: Vec<Vertex>, indices: Vec<u16>, program: glium::Program) -> Self {
+    pub fn new<F: glium::backend::Facade>(display: &F, noise_data: &NoiseContext, terrain_program: glium::Program, grass_program: glium::Program) -> Self {
+        let mut vertices = Vec::new();
+        let mut attrs = Vec::new();
+
+        let mut grass_jitter = Vec::new();
+        let mut rng = rand::thread_rng();
+        for _ in 0..MAX_GRASS_PER_SQUARE {
+            let jitter = rng.gen::<(f32, f32, f32)>();
+            grass_jitter.push(jitter);
+        }
+
+        let scale = 1;
+        for x in 0..WORLD_SIZE {
+            for z in 0..WORLD_SIZE {
+                let px = (x * scale) as f32;
+                let pz = (z * scale) as f32;
+
+                let height_value = noise_data.get_height(px, pz);
+
+                vertices.push(Vertex {
+                    position: [ px, height_value, pz],
+                    tex_coords: [px, pz]
+                });
+
+                let grass_per = 100;
+                for &(jitter_x, jitter_z, personal) in grass_jitter.iter().take(grass_per) {
+                    let gx = px + scale as f32 * (jitter_x);
+                    let gz = pz + scale as f32 * (jitter_z);
+                    let grass_height_value = noise_data.get_height(gx, gz);
+
+                    attrs.push(GrassAttrs { offset: [ gx, grass_height_value, gz ], rand_factor: personal});
+                }
+            }
+        }
+
+        let grass_points = glium::VertexBuffer::new(display, vec![
+            PosOnlyVertex { position: [ 0.0, 0.0, 0.0] },
+        ]);
+
         Terrain {
-            vbo: glium::VertexBuffer::new(display, vertices),
-            wireframe: glium::IndexBuffer::new(display, glium::index::LinesList(indices)),
-            program: program,
-            level: 4,
+            terrain_vbo: glium::VertexBuffer::new(display, vertices),
+            grass_vbo: grass_points,
+            grass_indices: glium::index::NoIndices(glium::index::PrimitiveType::Points),
+            grass_attrs: glium::VertexBuffer::new(display, attrs),
+            terrain_program: terrain_program,
+            grass_program: grass_program,
+            level: 6,
         }
     }
 
     pub fn update(&mut self, event: &glutin::Event) {
+        //
         match event {
             &glutin::Event::KeyboardInput(glutin::ElementState::Pressed, _, Some(glutin::VirtualKeyCode::T)) => {
-                self.level += 1;
+                if  num::pow(2, self.level + 1) < (WORLD_SIZE - 1) {
+                    self.level += 1;
+                }
             },
             &glutin::Event::KeyboardInput(glutin::ElementState::Pressed, _, Some(glutin::VirtualKeyCode::G)) => {
-                self.level -= 1;
+                if self.level > 1 {
+                    self.level -= 1;
+                }
             },
             _ => {},
         };
     }
 
     pub fn render<F: glium::backend::Facade, S: glium::Surface, U: glium::uniforms::Uniforms>(&self, display: &F, frame: &mut S, uniforms: &U, params: &glium::DrawParameters) {
-        let resolution = 65;
-        let mut optimised = Vec::with_capacity((resolution * resolution) as usize);
-        subdivide(&mut optimised, self.level, Square{top: p(0, 0), w: resolution-1});
+        let mut optimised = Vec::with_capacity((WORLD_SIZE * WORLD_SIZE) as usize);
+        subdivide(&mut optimised, self.level, Square{top: p(0, 0), w: WORLD_SIZE-1});
 
-        let indicies = glium::IndexBuffer::new(display, glium::index::LinesList(optimised));
+        let indicies = glium::IndexBuffer::new(display, glium::index::TrianglesList(optimised));
 
-        frame.draw(&self.vbo, &indicies, &self.program, uniforms, params).unwrap();
+        frame.draw(&self.terrain_vbo, &indicies, &self.terrain_program, uniforms, params).unwrap();
+        frame.draw((&self.grass_vbo, self.grass_attrs.per_instance_if_supported().unwrap()), &self.grass_indices, &self.grass_program, uniforms, params).unwrap();
     }
 }
 

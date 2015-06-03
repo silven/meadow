@@ -1,7 +1,4 @@
 extern crate glium;
-use std::collections::HashMap;
-use std::cell::RefCell;
-use std::ops::Deref;
 
 pub struct ShaderBundle {
     vs: String,
@@ -27,13 +24,12 @@ fn read_shader(path: &String) -> String {
     use std::fs::File;
     use std::io::Read;
     use std::path::Path;
-    let src_dir = Path::new("shaders");
+    let src_dir = Path::new("src/shaders");
 
     let complete_path = src_dir.join(path);
-    let as_str = complete_path.to_str().unwrap();
+    let path_as_str = complete_path.to_str().unwrap();
 
-    println!("Debug Loading shader: {}", as_str);
-    let mut file = File::open(as_str).unwrap();
+    let mut file = File::open(path_as_str).unwrap();
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap();
 
