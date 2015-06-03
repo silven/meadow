@@ -2,6 +2,5 @@ target
 .settings
 .DS_Store
 */.DS_Store
-Cargo.lock
 meadow.sublime-workspace
 
