@@ -30,7 +30,7 @@ void main(){
     seedPos.x += personal - 0.5;
     seedPos.z += v_in[0].rand_factor - 0.5;
 
-    vec4 up = vec4(0.0, 1.0, 0.0, 0.0);
+    vec4 up = vec4(fract(personal / 10), 1.0, -fract(personal2 / 10), 0.0);
 
     float height = 1.0;
     float width = 0.02;
@@ -41,7 +41,7 @@ void main(){
     vec4 Ydisplacement = 0.5 * length(windVec) * up;
 
     // Side one
-    int lod = 3;
+    int lod = 5;
     for(int i = 0; i <= lod; i++) {
         float progress = (i/float(lod));
         float next = (i+1/float(lod));
